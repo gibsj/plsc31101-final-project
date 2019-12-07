@@ -1,0 +1,135 @@
+---
+title: "State Department Statements Filtering"
+author: "Jenna Gibson"
+date: "December 7, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(purrr)
+library(lubridate)
+library(data.table)
+
+```
+
+##Load Scraped Data
+
+```{r}
+
+load("../Data/state_dept_data.RData")
+
+```
+
+#Fixing date column
+
+```{r}
+
+head(url_vec)
+
+get_dates <- function(i){
+  
+  url_whole <- str_split(i, "-2/") #splitting problematic ending off two observations
+  
+  ds <- sapply(url_whole, "[[", 1)
+  
+  url_end <- str_split(ds, "briefing-") #isolating date
+  
+  d <- sapply(url_end, "[[", 2)
+  
+  return(d)
+}
+
+get_dates(url_vec[[30]]) #testing problematic observation - success! 
+
+dates_vec <- map(url_vec, get_dates) %>% #mapping over all urls
+  unlist() %>%
+  mdy() #mdy format
+
+head(dates_vec)
+
+dat$date <- dates_vec
+
+```
+
+##Filtering for only NK related docs
+
+```{r}
+
+unnested <- dat %>%
+  unnest(index) %>% 
+  filter(index == "NORTH KOREA" | index == "KOREA, NORTH" | index == "DPRK")
+
+```
+
+
+##Searching for all mentions of "Kim"
+
+```{r}
+
+unnested <- unnested %>%
+  unnest(text) #Separating each paragraph before search
+
+#Function to detect mentions of Kim or North Korea
+Kim <- function(i){
+  return(str_detect(i, "Kim|North Korea"))
+} 
+
+unnested$text[690]
+Kim(unnested$text[690]) #Testing - should be FALSE
+
+unnested$text[691]
+Kim(unnested$text[691]) #Testing - should be TRUE
+
+#Filtering out paragraphs with no mention of Kim
+kim_texts <- unnested %>% 
+  mutate(kim = map_lgl(text, Kim)) %>%
+  filter(kim == T) 
+
+#Function to remove reporter questions
+Remove_Qs <- function(i){
+  return(str_detect(i, "^QUESTION", negate = T))
+}
+
+#Removing all questions
+kim_texts <- kim_texts%>%
+  mutate(no_q = map_lgl(text, Remove_Qs)) %>%
+  filter(no_q == T) 
+
+```
+
+##Getting word directly before Kim - presumably title
+
+```{r}
+
+kim_texts <- kim_texts %>%
+  mutate(mention = str_extract(text, "[A-Za-z'-]+ Kim+ [A-Za-z'-]+")) %>%
+  na.omit() #removing paragraphs that dont mention Kim
+
+table(kim_texts$mention) #look at different combinations with "Kim" within text
+
+```
+
+##Remove other Kims - ie Sung Kim, Chloe Kim
+
+```{r}
+
+Remove_Kims <- function(i){
+  return(str_detect(i, "Ambassador|Chloe|Sung|Yong-chol", negate = T)) #detecting other Kims besides KJU
+}
+
+state_kim_texts <- kim_texts %>%
+  mutate(kju = map_lgl(mention, Remove_Kims)) %>% #mapping to leave only kju mentions
+  filter(kju == T) %>%
+  select(ID, index, date, text, mention) #cleaning up and removing unncessary columns
+
+table(state_kim_texts$mention)
+
+save(state_kim_texts, file = "state_kim_texts.RData")
+
+```

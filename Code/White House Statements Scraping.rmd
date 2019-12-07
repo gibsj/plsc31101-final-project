@@ -1,0 +1,123 @@
+---
+title: "Final Project Computing"
+author: "Jenna Gibson"
+date: "November 29, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(purrr)
+library(lubridate)
+library(data.table)
+
+```
+
+
+##Function to get URLs from each result page
+
+```{r}
+
+get_urls <- function(i){
+  
+  html <- read_html(i)
+  
+  nodes <- html_nodes(html, ".briefing-statement__title a") #Finding html for all results
+  
+  url_start <- str_split(nodes, "href=\"") #splitting html to get url
+  url_start <- sapply(url_start, "[[", 2)
+  
+  full_urls <- str_split(url_start, "\">") #cutting extra html after the url
+  full_urls <- sapply(full_urls, "[[", 1)
+  
+  return(full_urls)
+  
+}
+
+
+```
+
+
+##Function for data from each page
+
+```{r}
+
+scrape_docs <- function(i){
+  doc <- read_html(i)
+
+  statement_type <- html_nodes(doc, ".page-header__section") %>% 
+    html_text() %>%
+    as.vector()
+  
+  date <- html_nodes(doc, "time") %>%
+    html_text()
+  mdy()
+  
+  title <- html_nodes(doc, ".page-header__title") %>%
+    html_text()
+  
+  text <- html_nodes(doc, ".editor p") %>%
+    html_text()
+  
+  all_info <- list(statement_type = statement_type, date = date, title = title, text = text)
+  
+  return(all_info)
+}
+
+
+```
+
+
+##Getting all 5 result page URLs
+
+```{r}
+
+all_pages <- str_c("https://www.whitehouse.gov/briefings-statements/page/",0:150, "/?issue_filter=foreign-policy")
+
+head(all_pages)
+
+```
+
+##Mapping
+
+```{r}
+
+#Get all 176 URLs
+url_vec <- map(all_pages, get_urls) %>% 
+  unlist()
+
+head(url_vec)
+
+#Get all data from 176 URLs into list
+
+all_scraped <- map(url_vec, scrape_docs) 
+
+all_scraped[1] #check if it worked - success!
+
+```
+
+
+##Making Dataframe and saving
+
+```{r}
+
+indx <- sapply(all_scraped, length)
+
+dat <- as.data.frame(do.call(rbind,lapply(all_scraped, `length<-`, max(indx)))) 
+
+dat <- dat %>%
+  mutate(ID = row.names(dat)) %>% #Creating ID before dropping some docs
+  select(ID, everything()) #Putting ID column first
+  
+head(dat)
+
+save(dat, file = "white_house_data.RData")
+
+```
+
+
+

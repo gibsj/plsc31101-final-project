@@ -1,0 +1,116 @@
+---
+title: "Final Project Computing"
+author: "Jenna Gibson"
+date: "November 29, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(purrr)
+library(lubridate)
+library(data.table)
+
+```
+
+
+##Function to get URLs from each result page
+
+```{r}
+
+get_urls <- function(i){
+  
+  html <- read_html(i)
+  
+  nodes <- html_nodes(html, ".collection-result__link") #Finding html for all results
+  
+  url_start <- str_split(nodes, "href=\"") #splitting html to get url
+  url_start <- sapply(url_start, "[[", 2)
+  
+  full_urls <- str_split(url_start, "\" class") #cutting extra html after the url
+  full_urls <- sapply(full_urls, "[[", 1)
+  
+  return(full_urls)
+  
+}
+
+```
+
+
+##Function for data from each page
+
+```{r}
+
+scrape_docs <- function(i){
+  doc <- read_html(i)
+
+  index <- html_nodes(doc, ".summary__list a") %>% 
+    html_text() %>%
+    as.vector()
+  
+  date <- html_nodes(doc, ".article-meta__publish-date") %>%
+    html_text()
+  
+  text <- html_nodes(doc, ".entry-content p+ p") %>%
+    html_text()
+  
+  all_info <- list(index = index, date = date, text = text)
+  
+  return(all_info)
+}
+
+```
+
+
+##Getting all 5 result page URLs
+
+```{r}
+
+
+five_urls <- str_c("https://www.state.gov/department-press-briefings/page/",0:5, "/?results=30&gotopage&total_pages=5")
+
+five_urls
+
+```
+
+##Mapping
+
+```{r}
+
+#Get all 176 URLs
+url_vec <- map(five_urls, get_urls) %>% 
+  unlist()
+
+#Get all data from 176 URLs into list
+
+all_scraped <- map(url_vec, scrape_docs) 
+
+```
+
+
+##Making Dataframe
+
+```{r}
+
+indx <- sapply(all_scraped, length)
+
+dat <- as.data.frame(do.call(rbind,lapply(all_scraped, `length<-`, max(indx)))) 
+
+dat <- dat %>%
+  mutate(ID = row.names(dat)) %>% #Creating ID before dropping some docs
+  select(ID, everything()) #Putting ID column first
+  
+head(dat)
+
+save(dat, url_vec, file = "state_dept_data.RData")
+
+
+```
+
+
+
+

@@ -1,0 +1,109 @@
+---
+title: "White House Statements Filtering"
+author: "Jenna Gibson"
+date: "December 7, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(purrr)
+library(lubridate)
+library(data.table)
+```
+
+
+##Load scraped data
+
+```{r}
+
+load("../Data/white_house_data.RData")
+
+dat$date <- mdy(dat$date)
+
+head(dat)
+
+```
+
+
+##Filtering for only NK related docs
+
+```{r}
+
+unnested <- dat %>%
+  unnest(text)
+
+
+filter_text <- function(i){
+  return(str_detect(i, "North Korea|Korea, North|Democratic People's Republic of Korea|DPRK|Kim"))
+} 
+
+nk_texts <- unnested %>% 
+  mutate(nk = map_lgl(text, filter_text)) %>%
+  filter(nk == T)
+
+```
+
+
+##Searching for all mentions of "Kim"
+
+```{r}
+
+#Function to remove reporter questions
+Remove_Qs <- function(i){
+  return(str_detect(i, "^Q()", negate = T))
+}
+
+#Removing all questions
+nk_texts <- nk_texts %>%
+  mutate(no_q = map_lgl(text, Remove_Qs)) %>%
+  filter(no_q == T) 
+
+#Find mentions of Kim specifically
+find_kim <- function(i){
+  return(str_detect(i, "Kim"))
+}
+
+#Removing all non-Kim texts
+kim_texts <- nk_texts %>%
+  mutate(kim = map_lgl(text, find_kim)) %>%
+  filter(kim == T)
+
+```
+
+##Getting word directly before Kim - presumably title
+
+```{r}
+
+kim_texts <- kim_texts %>%
+  mutate(mention = str_extract(text, "[A-Za-z'-]+ Kim+ [A-Za-z'-]+ [A-Za-z'-]+")) #%>%
+  #na.omit() #removing paragraphs that dont mention Kim
+
+table(kim_texts$mention) #look at different combinations with "Kim" within text
+
+```
+
+##Remove other Kims - ie Kim Jung-sook, Kim Dong Chul
+
+```{r}
+
+Remove_Kims <- function(i){
+  return(str_detect(i, "Jung-sook|Dong-chul|Dong Chul", negate = T)) #detecting other Kims besides KJU
+}
+
+wh_kim_texts <- kim_texts %>%
+  mutate(kju = map_lgl(mention, Remove_Kims)) %>% #mapping to leave only kju mentions
+  filter(kju == T) %>%
+  select(ID, statement_type, date, title, text, mention) #cleaning up and removing unncessary columns
+
+table(wh_kim_texts$mention)
+
+save(wh_kim_texts, file ="wh_kim_texts.RData")
+
+```
+
+

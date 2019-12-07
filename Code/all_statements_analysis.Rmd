@@ -1,0 +1,83 @@
+---
+title: "All Statements Analysis"
+author: "Jenna Gibson"
+date: "December 7, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(purrr)
+library(lubridate)
+library(data.table)
+library(dplyr)
+library(kableExtra)
+
+```
+
+##Loading Data
+
+```{r}
+load("../Data/wh_kim_texts.RData")
+load("../Data/state_kim_texts.RData")
+
+```
+
+##Merging mentions
+
+```{r}
+all_mentions <- merge(state_kim_texts, wh_kim_texts, all = T)
+
+```
+
+
+##Group into distinct titles
+
+```{r}
+
+titles <- all_mentions %>%
+  mutate(chair = str_extract(mention, "Chairman")) %>% #finding all Chairman titles
+  mutate(leader = str_extract(mention, "leader")) %>% #finding all leader titles
+  mutate(regime = str_extract(mention, "regime")) %>% #finding all regime titles
+  mutate(dictator = str_extract(mention, "dictator")) #finding all dictator titles
+  
+
+titles <- coalesce(titles$chair, titles$leader, titles$regime, titles$dictator) #creating one vector
+
+titles[is.na(titles)] <- "no title" #replacing NAs with "No title"
+
+all_mentions <- all_mentions %>% #putting titles vector back into dataframe
+  mutate(titles = titles)
+
+```
+
+##Table of results
+
+```{r}
+
+table(all_mentions$titles)
+
+```
+
+
+##GGplotting
+
+```{r}
+
+#pdf("../Results/Kim_Titles.pdf")
+
+ggplot(aes(date, titles, color = titles), data = all_mentions) +
+  geom_jitter() +
+  labs(title = "U.S. Government Mentions of Kim Jong Un", color = "Titles", caption = "From White House and State Dept Statements") +
+  xlab("Date") +
+  ylab("Titles")
+
+#dev.off()
+
+```
+
+
