@@ -108,10 +108,13 @@ kim_texts <- kim_texts%>%
 ```{r}
 
 kim_texts <- kim_texts %>%
-  mutate(mention = str_extract(text, "[A-Za-z'-]+ Kim+ [A-Za-z'-]+")) %>%
-  na.omit() #removing paragraphs that dont mention Kim
+  mutate(mention = str_extract_all(text, "[A-Za-z'-]+ Kim+ [A-Za-z'-]+ [A-Za-z'-]+|Kim+ [A-Za-z'-]+ [A-Za-z'-]+|[A-Za-z'-]+ Kim.|[A-Za-z'-]+. Kim+ [A-Za-z'-]+|. Kim [A-Za-z'-]+")) %>%
+  na.omit()
 
-table(kim_texts$mention) #look at different combinations with "Kim" within text
+kim_texts_all <- kim_texts %>% #unnest multiple mentions from one paragraph
+  unnest(mention)
+
+table(kim_texts_all$mention)
 
 ```
 
@@ -120,16 +123,16 @@ table(kim_texts$mention) #look at different combinations with "Kim" within text
 ```{r}
 
 Remove_Kims <- function(i){
-  return(str_detect(i, "Ambassador|Chloe|Sung|Yong-chol", negate = T)) #detecting other Kims besides KJU
+  return(str_detect(i, "Ambassador|Chloe|Sung|Yong-chol|Hyok-chol|Mr.", negate = T)) #detecting other Kims besides KJU
 }
 
-state_kim_texts <- kim_texts %>%
+state_kim_texts <- kim_texts_all %>%
   mutate(kju = map_lgl(mention, Remove_Kims)) %>% #mapping to leave only kju mentions
   filter(kju == T) %>%
   select(ID, index, date, text, mention) #cleaning up and removing unncessary columns
 
 table(state_kim_texts$mention)
 
-save(state_kim_texts, file = "state_kim_texts.RData")
+save(state_kim_texts, file = "../Data/state_kim_texts.RData")
 
 ```

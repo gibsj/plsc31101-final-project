@@ -14,8 +14,6 @@ library(stringr)
 library(purrr)
 library(lubridate)
 library(data.table)
-library(dplyr)
-library(kableExtra)
 
 ```
 
@@ -27,42 +25,91 @@ load("../Data/state_kim_texts.RData")
 
 ```
 
-##Merging mentions
-
-```{r}
-all_mentions <- merge(state_kim_texts, wh_kim_texts, all = T)
-
-```
-
-
-##Group into distinct titles
+##Group into distinct titles for State Dept
 
 ```{r}
 
-titles <- all_mentions %>%
+s_titles <- state_kim_texts %>%
   mutate(chair = str_extract(mention, "Chairman")) %>% #finding all Chairman titles
   mutate(leader = str_extract(mention, "leader")) %>% #finding all leader titles
   mutate(regime = str_extract(mention, "regime")) %>% #finding all regime titles
   mutate(dictator = str_extract(mention, "dictator")) #finding all dictator titles
   
 
-titles <- coalesce(titles$chair, titles$leader, titles$regime, titles$dictator) #creating one vector
+s_titles <- coalesce(s_titles$chair, s_titles$leader, s_titles$regime, s_titles$dictator) #creating one vector
 
-titles[is.na(titles)] <- "no title" #replacing NAs with "No title"
+s_titles[is.na(s_titles)] <- "no title" #replacing NAs with "No title"
 
-all_mentions <- all_mentions %>% #putting titles vector back into dataframe
-  mutate(titles = titles)
+state_kim_texts <- state_kim_texts %>% #putting titles vector back into dataframe
+  mutate(s_titles = s_titles)
 
 ```
+
+
+##Group into distinct titles for WH
+
+```{r}
+
+wh_titles <- wh_kim_texts %>%
+  mutate(chair = str_extract(mention, "Chairman")) %>% #finding all Chairman titles
+  mutate(leader = str_extract(mention, "leader")) %>% #finding all leader titles
+  mutate(regime = str_extract(mention, "regime")) %>% #finding all regime titles
+  mutate(dictator = str_extract(mention, "dictator")) #finding all dictator titles
+  
+
+wh_titles <- coalesce(wh_titles$chair, wh_titles$leader, wh_titles$regime, wh_titles$dictator) #creating one vector
+
+wh_titles[is.na(wh_titles)] <- "no title" #replacing NAs with "No title"
+
+wh_kim_texts <- wh_kim_texts %>% #putting titles vector back into dataframe
+  mutate(wh_titles = wh_titles)
+
+```
+
 
 ##Table of results
 
 ```{r}
 
-table(all_mentions$titles)
+table(state_kim_texts$titles)
+table(wh_kim_texts$titles)
 
 ```
 
+```{r}
+
+indx <- c(rep(NA, max(length(wh_titles) - length(s_titles)))) #creating NAs to even length of State/WH observations
+
+s_titles_v <- c(s_titles, indx)
+
+state <- c(rep("State", length(s_titles_v)))
+
+s_dates <- c(state_kim_texts$date, indx)
+
+state_dat <- as.data.frame(s_titles_v, row.names = NULL, optional = F, stringsAsFactors = F)
+
+state_dat <- state_dat %>%
+  mutate(source = state) %>%
+  mutate(title = s_titles_v) %>%
+  mutate(date = s_dates) %>%
+  select(source, title, date)
+
+
+wh <- c(rep("White House", length(wh_titles)))
+
+wh_dat <- as.data.frame(wh_titles, row.names = NULL, optional = F, stringsAsFactors = F)
+
+wh_dat <- wh_dat %>%
+  mutate(source = wh) %>%
+  mutate(title = wh_titles) %>%
+  mutate(date = wh_kim_texts$date) %>%
+  select(source, title, date)
+
+
+#creating single dataframe for ggplot
+all_mentions_gg <- full_join(wh_dat, state_dat)
+
+```
 
 ##GGplotting
 
@@ -70,7 +117,7 @@ table(all_mentions$titles)
 
 #pdf("../Results/Kim_Titles.pdf")
 
-ggplot(aes(date, titles, color = titles), data = all_mentions) +
+ggplot(all_mentions_gg, aes(date, title, color=title, shape=source)) +
   geom_jitter() +
   labs(title = "U.S. Government Mentions of Kim Jong Un", color = "Titles", caption = "From White House and State Dept Statements") +
   xlab("Date") +

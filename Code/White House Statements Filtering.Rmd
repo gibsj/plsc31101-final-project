@@ -73,6 +73,20 @@ kim_texts <- nk_texts %>%
   mutate(kim = map_lgl(text, find_kim)) %>%
   filter(kim == T)
 
+#Removing all news clips
+Remove_news <- function(i){
+  return(str_detect(i, "News Clips", negate = T))
+}
+
+kim_texts$statement_type[221] <- "Statements & Releases" #one observation missing - throwing an error below
+
+kim_texts <- kim_texts %>%
+  mutate(no_news = map_lgl(statement_type, Remove_news)) %>%
+  filter(no_news == T) 
+
+
+kim_texts$text[11]
+
 ```
 
 ##Getting word directly before Kim - presumably title
@@ -80,10 +94,19 @@ kim_texts <- nk_texts %>%
 ```{r}
 
 kim_texts <- kim_texts %>%
-  mutate(mention = str_extract(text, "[A-Za-z'-]+ Kim+ [A-Za-z'-]+ [A-Za-z'-]+")) #%>%
-  #na.omit() #removing paragraphs that dont mention Kim
+  mutate(mention = str_extract_all(text, "[A-Za-z'-]+ Kim+ [A-Za-z'-]+ [A-Za-z'-]+|Kim+ [A-Za-z'-]+ [A-Za-z'-]+|[A-Za-z'-]+ Kim.|[A-Za-z'-]+. Kim+ [A-Za-z'-]+|. Kim [A-Za-z'-]+")) %>%
+  na.omit()
 
-table(kim_texts$mention) #look at different combinations with "Kim" within text
+#fixing 3 observations
+kim_texts$mention[216] <- "the Kim regime."
+kim_texts$mention[230] <- "the Kim regime." 
+kim_texts$mention[232] <- "the Kim regime." 
+
+
+kim_texts_all <- kim_texts %>% #unnest multiple mentions from one paragraph
+  unnest(mention)
+
+table(kim_texts_all$mention) #view all mentions
 
 ```
 
@@ -92,17 +115,17 @@ table(kim_texts$mention) #look at different combinations with "Kim" within text
 ```{r}
 
 Remove_Kims <- function(i){
-  return(str_detect(i, "Jung-sook|Dong-chul|Dong Chul", negate = T)) #detecting other Kims besides KJU
+  return(str_detect(i, "Jung-sook|Dong-chul|Dong Chul|Lady|Sung|Honorable|Kwang-jin|Jong-il|Mrs.|Tony|Yong|Kimb|Hak Song", negate = T)) #detecting other Kims besides KJU
 }
 
-wh_kim_texts <- kim_texts %>%
+wh_kim_texts <- kim_texts_all %>%
   mutate(kju = map_lgl(mention, Remove_Kims)) %>% #mapping to leave only kju mentions
   filter(kju == T) %>%
   select(ID, statement_type, date, title, text, mention) #cleaning up and removing unncessary columns
 
 table(wh_kim_texts$mention)
 
-save(wh_kim_texts, file ="wh_kim_texts.RData")
+save(wh_kim_texts, file ="../Data/wh_kim_texts.RData")
 
 ```
 
